@@ -18,6 +18,13 @@ final class Message: Identifiable {
     }
 }
 
+// MARK: - Notifications
+enum NotificationType: String, Codable {
+    case morning = "morning" // 8 AM
+    case lunch = "lunch"    // 1 PM
+    case water = "water"    // Periodic
+}
+
 @Model
 final class UserPreferences: Identifiable {
     var id: UUID
@@ -33,6 +40,16 @@ final class UserPreferences: Identifiable {
     var activityLevel: String? // "Sedentary", "Active", "Very Active"
     var selectedPersona: String? // "BiteBuddy", "Titan", "Lumi"
     
+    // Phase 14: Features
+    var dailyWaterGoal: Int
+    var hapticEnabled: Bool
+    var soundEnabled: Bool
+    
+    // Phase 15: Notification Controls
+    var morningReminderEnabled: Bool
+    var lunchReminderEnabled: Bool
+    var waterReminderEnabled: Bool
+    
     init(id: UUID = UUID(), 
          name: String = "", 
          dailyGoal: Int = 2000, 
@@ -42,7 +59,13 @@ final class UserPreferences: Identifiable {
          hasCompletedOnboarding: Bool = false,
          goalType: String? = "Maintain",
          activityLevel: String? = "Active",
-         selectedPersona: String? = "BiteBuddy") {
+         selectedPersona: String? = "BiteBuddy",
+         dailyWaterGoal: Int = 2500,
+         hapticEnabled: Bool = true,
+         soundEnabled: Bool = true,
+         morningReminderEnabled: Bool = true,
+         lunchReminderEnabled: Bool = true,
+         waterReminderEnabled: Bool = true) {
         self.id = id
         self.name = name
         self.dailyGoal = dailyGoal
@@ -53,6 +76,12 @@ final class UserPreferences: Identifiable {
         self.goalType = goalType
         self.activityLevel = activityLevel
         self.selectedPersona = selectedPersona
+        self.dailyWaterGoal = dailyWaterGoal
+        self.hapticEnabled = hapticEnabled
+        self.soundEnabled = soundEnabled
+        self.morningReminderEnabled = morningReminderEnabled
+        self.lunchReminderEnabled = lunchReminderEnabled
+        self.waterReminderEnabled = waterReminderEnabled
     }
 }
 
@@ -92,15 +121,16 @@ struct MealSummary: Codable {
     let protein: Double
     let carbs: Double
     let fats: Double
+    let date: String
     let items: [FoodItem]
-    let date: String? // Optional YYYY-MM-DD
-}
-
-struct FoodItem: Codable, Identifiable {
-    var id: String { name }
-    let name: String
-    let quantity: String
-    let calories: Int
+    let healthScore: Int?  // 1-10 rating for gamification (optional for backwards compatibility)
+    
+    struct FoodItem: Codable, Identifiable {
+        var id: String { name }
+        let name: String
+        let quantity: String
+        let calories: Int
+    }
 }
 
 // MARK: - Phase 2 Persistence Models
@@ -113,16 +143,18 @@ final class DailyLog: Identifiable {
     var protein: Double
     var carbs: Double
     var fats: Double
+    var waterIntake: Int // New: milliliters
     
     @Relationship(deleteRule: .cascade) var meals: [MealEntry] = []
     
-    init(id: UUID = UUID(), date: Date, totalCalories: Int = 0, protein: Double = 0, carbs: Double = 0, fats: Double = 0) {
+    init(id: UUID = UUID(), date: Date, totalCalories: Int = 0, protein: Double = 0, carbs: Double = 0, fats: Double = 0, waterIntake: Int = 0) {
         self.id = id
         self.date = Calendar.current.startOfDay(for: date) // Force normalization
         self.totalCalories = totalCalories
         self.protein = protein
         self.carbs = carbs
         self.fats = fats
+        self.waterIntake = waterIntake
     }
 }
 

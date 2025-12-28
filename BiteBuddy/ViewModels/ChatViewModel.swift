@@ -12,6 +12,8 @@ class ChatViewModel {
     var suggestions: [String] = []
     var userPrefs: UserPreferences?
     var showOnboarding: Bool = false
+    var isLoading: Bool = true  // Prevent flash during prefs load
+    var showCelebration: Bool = false // Triggers confetti/haptics
     
     // PERSONA MANAGEMENT
     var currentPersona: BuddyPersona {
@@ -55,13 +57,19 @@ class ChatViewModel {
             userPrefs = results.first
             if userPrefs == nil {
                 showOnboarding = true
-            } else if userPrefs?.hasCompletedOnboarding == false {
-                showOnboarding = true
+            } else {
+                if userPrefs?.hasCompletedOnboarding == false {
+                    showOnboarding = true
+                }
+                // Sync settings
+                self.dailyGoal = userPrefs?.dailyGoal ?? 2000
+                print("✅ Synced daily goal: \(self.dailyGoal)")
             }
-            dailyGoal = userPrefs?.dailyGoal ?? 2000
         } catch {
             print("Failed to fetch preferences: \(error)")
         }
+        
+        isLoading = false  // Prefs loaded, safe to show UI
     }
     
     func fetchMessages() {
@@ -104,6 +112,8 @@ class ChatViewModel {
         addMessage(initialMsg)
     }
     
+    
+    @MainActor
     func sendMessage(_ text: String? = nil) {
         let content = (text ?? inputText).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty else { return }
@@ -144,6 +154,21 @@ class ChatViewModel {
                     
                     self.suggestions = response.suggestions
                     
+                    // FALLBACK SUGGESTION LOGIC (Ghost Chip Fix)
+                    if self.suggestions.isEmpty {
+                        print("👻 Suggestions empty - generating fallbacks")
+                        let fallbackChips = self.generateFallbackSuggestions(for: response.content)
+                        self.suggestions = fallbackChips
+                    }
+                    print("🎯 Updated suggestions to: \(self.suggestions)")
+                    
+                    // WATER LOGGING (if AI returned water amount)
+                    if let waterAmount = response.waterAmount {
+                        print("💧 Logging water: \(waterAmount)ml")
+                        dataService?.logWater(amount: waterAmount)
+                        fetchDailyStats()
+                    }
+                    
                     // STATEFUL SESSION LOGIC
                     // Determine if we are replacing an existing meal or creating a new one.
                     var replacingMessageId: UUID? = nil
@@ -173,6 +198,10 @@ class ChatViewModel {
                          }
                     }
                     
+                    print("📝 AI Response content: '\(response.content)'")
+                    print("📝 AI Summary: \(response.summary != nil ? "YES" : "NO")")
+                    print("📝 AI Suggestions count: \(response.suggestions.count)")
+                    
                     let aiMsg = Message(content: response.content, isUser: false, summaryData: summaryJson)
                     addMessage(aiMsg)
                     
@@ -189,6 +218,7 @@ class ChatViewModel {
                         self.activeMealContextId = aiMsg.id
                     }
                     
+                    print("✅ AI message added, suggestions should now be: \(self.suggestions)")
                     isThinking = false
                 }
             } catch {
@@ -201,9 +231,61 @@ class ChatViewModel {
         }
     }
     
+    
     private func addMessage(_ message: Message) {
         messages.append(message)
         modelContext?.insert(message)
         try? modelContext?.save()
+    }
+    
+    // MARK: - Safety Systems
+    
+    private func generateFallbackSuggestions(for responseText: String) -> [String] {
+        let text = responseText.lowercased()
+        
+        // PRIORITY 1: SPECIFIC FOOD/CONTAINER CONTEXT
+        if text.contains("bowl") || text.contains("plate") {
+            return ["Small Bowl", "Medium Bowl", "Large Bowl"]
+        }
+        
+        if text.contains("glass") || text.contains("cup") {
+            return ["Half Glass", "Full Glass", "Mug"]
+        }
+        
+        // PRIORITY 2: QUANTITY/NUMBER QUESTIONS
+        if text.contains("how many") || text.contains("number of") {
+            // Check for specific food items to customize
+            if text.contains("egg") {
+                return ["1 egg", "2 eggs", "3 eggs"]
+            }
+            if text.contains("idli") || text.contains("roti") || text.contains("slice") {
+                return ["1", "2", "3", "4"]
+            }
+            // Generic numeric
+            return ["1", "2", "3", "4"]
+        }
+        
+        // PRIORITY 3: SIZE/PORTION QUESTIONS
+        if text.contains("size") || text.contains("portion") || text.contains("how much") {
+            // Check if it's about solid food vs liquid
+            if text.contains("sambhar") || text.contains("curry") || text.contains("dal") {
+                return ["Small Bowl", "Medium Bowl", "Large Bowl"]
+            }
+            return ["Small", "Medium", "Large"]
+        }
+        
+        // PRIORITY 4: CONFIRMATION FALLBACKS (After logging)
+        if text.contains("logged") || text.contains("added") || text.contains("saved") {
+            return ["Add Water", "View History", "Check Goal"]
+        }
+        
+        // PRIORITY 5: GREETING/WELCOME FALLBACKS
+        if text.contains("hello") || text.contains("hi") || text.contains("welcome") {
+            return ["Log Breakfast", "Log Lunch", "Log Snack"]
+        }
+        
+        // PRIORITY 6: GENERIC SAFETY NET (NO GUESSING)
+        // If we don't know the context, do NOT guess "Wheat/White" (fixes Fruit Salad bug)
+        return ["Log Meal", "View History", "My Goal"]
     }
 }

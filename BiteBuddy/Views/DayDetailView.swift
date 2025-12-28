@@ -3,289 +3,224 @@ import SwiftData
 
 struct DayDetailView: View {
     let date: Date
-    @Query private var dayLogs: [DailyLog]
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.dismiss) private var dismiss
-    @State private var selectedMeal: MealEntry? = nil
-    var dismissAll: (() -> Void)? = nil
+    let log: DailyLog
+    let goal: Int
+    @Environment(\.dismiss) var dismiss
     
-    // We filter properly in the init
-    init(date: Date, dismissAll: (() -> Void)? = nil) {
-        self.date = date
-        self.dismissAll = dismissAll
-        let startOfDay = Calendar.current.startOfDay(for: date)
-        let endOfDay = Calendar.current.date(byAdding: .day, value: 1, to: startOfDay)!
-        
-        _dayLogs = Query(filter: #Predicate<DailyLog> { log in
-            log.date >= startOfDay && log.date < endOfDay
-        })
+    var progress: Double {
+        Double(log.totalCalories) / Double(goal)
     }
     
-    var dailyLog: DailyLog? {
-        dayLogs.first
+    var isOverGoal: Bool {
+        log.totalCalories > goal
     }
     
     var body: some View {
         ZStack {
-            Color(hex: "F8FAFC").ignoresSafeArea()
+            Theme.Colors.backgroundPrimary.ignoresSafeArea()
             
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 20, weight: .bold))
-                            .foregroundColor(Color(hex: "0F172A"))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(date.formatted(.dateTime.month().day()))
+                            .font(.system(size: 24, weight: .black, design: .rounded))
+                            .foregroundColor(Theme.Colors.textPrimary)
+                        Text(date.formatted(.dateTime.weekday(.wide)))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(Theme.Colors.textSecondary)
                     }
                     
                     Spacer()
                     
-                    Text(date.formatted(date: .abbreviated, time: .omitted))
-                        .font(.system(size: 18, weight: .black))
-                        .foregroundColor(Color(hex: "0F172A"))
-                    
-                    Spacer()
-                    
-                    // Invisible spacer for balance
-                    Image(systemName: "chevron.left").opacity(0)
-                        .frame(width: 20)
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundColor(Theme.Colors.textTertiary)
+                    }
                 }
-                .padding()
-                .background(Color.white)
-                .overlay(Rectangle().frame(height: 1).foregroundColor(Color(hex: "E2E8F0")), alignment: .bottom)
+                .padding(25)
                 
-                ScrollView {
-                    VStack(spacing: 20) {
-                        if let log = dailyLog, !log.meals.isEmpty {
-                            // Summary Card
-                            DailySummaryHeader(log: log)
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 25) {
+                        // Total Calories Card
+                        VStack(spacing: 15) {
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("TOTAL")
+                                        .font(.system(size: 10, weight: .black))
+                                        .foregroundColor(Theme.Colors.textTertiary)
+                                    Text("\(log.totalCalories)")
+                                        .font(.system(size: 48, weight: .black, design: .rounded))
+                                        .foregroundColor(isOverGoal ? Theme.Colors.warning : Theme.Colors.primary)
+                                    Text("KCAL")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(Theme.Colors.textSecondary)
+                                }
+                                
+                                Spacer()
+                                
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text("GOAL")
+                                        .font(.system(size: 10, weight: .black))
+                                        .foregroundColor(Theme.Colors.textTertiary)
+                                    Text("\(goal)")
+                                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                                        .foregroundColor(Theme.Colors.textSecondary)
+                                }
+                            }
                             
-                            // Meal List
-                            VStack(spacing: 16) {
-                                ForEach(log.meals.sorted(by: { $0.timestamp < $1.timestamp })) { meal in
-                                    Button(action: { selectedMeal = meal }) {
-                                        MealEntryRow(meal: meal)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    .contextMenu {
-                                        Button(role: .destructive) {
-                                            deleteMeal(meal)
-                                        } label: {
-                                            Label("Delete", systemImage: "trash")
-                                        }
-                                    }
+                            // Progress Bar
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Theme.Colors.backgroundSecondary)
+                                        .frame(height: 12)
+                                    
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(isOverGoal ? Theme.Colors.warning : Theme.Colors.primary)
+                                        .frame(width: min(geometry.size.width * progress, geometry.size.width), height: 12)
                                 }
                             }
-                        } else {
-                            VStack(spacing: 20) {
-                                Image(systemName: "fork.knife.circle.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(Color(hex: "E2E8F0"))
+                            .frame(height: 12)
+                            
+                            Text("\(Int(progress * 100))% of goal")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Theme.Colors.textSecondary)
+                        }
+                        .padding(20)
+                        .background(Theme.Colors.backgroundSecondary)
+                        .cornerRadius(20)
+                        
+                        // Macros
+                        HStack(spacing: 12) {
+                            MacroCard(label: "PROTEIN", value: log.protein, unit: "g", color: Theme.Colors.secondary)
+                            MacroCard(label: "CARBS", value: log.carbs, unit: "g", color: Theme.Colors.secondary)
+                            MacroCard(label: "FATS", value: log.fats, unit: "g", color: Theme.Colors.secondary)
+                        }
+                        
+                        // Meals
+                        if !log.meals.isEmpty {
+                            VStack(alignment: .leading, spacing: 15) {
+                                Text("MEALS")
+                                    .font(.system(size: 12, weight: .black))
+                                    .foregroundColor(Theme.Colors.textTertiary)
                                 
-                                Text("Quiet Day for Your Palette")
-                                    .font(.system(size: 18, weight: .black, design: .rounded))
-                                    .foregroundColor(Color(hex: "0F172A"))
-                                
-                                Text("You haven't logged any meals for this date yet. Your future self will thank you for the data!")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(Color(hex: "64748B"))
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 40)
-                                
-                                Button(action: {
-                                    if let dismissAll = dismissAll {
-                                        dismissAll()
-                                    } else {
-                                        dismiss()
-                                    }
-                                }) {
-                                    Text("START LOGGING")
-                                        .font(.system(size: 12, weight: .black))
-                                        .padding(.horizontal, 25)
-                                        .padding(.vertical, 12)
-                                        .background(Color(hex: "4F46E5"))
-                                        .foregroundColor(.white)
-                                        .cornerRadius(25)
+                                ForEach(log.meals.sorted(by: { $0.timestamp < $1.timestamp }), id: \.id) { meal in
+                                    MealCard(meal: meal)
                                 }
-                                .padding(.top, 10)
                             }
-                            .padding(.top, 100)
                         }
                     }
-                    .padding(20)
+                    .padding(25)
+                    .padding(.bottom, 30)
                 }
             }
         }
-        .sheet(item: $selectedMeal) { meal in
-            MealDetailSheet(meal: meal)
-                .presentationDetents([.medium, .large])
-        }
-        .onAppear {
-            print("DayDetailView appeared for date: \(date.formatted()). Found logs: \(dayLogs.count)")
-        }
-    }
-    
-    private func deleteMeal(_ meal: MealEntry) {
-        guard let log = dailyLog else { return }
-        
-        // Update aggregates
-        log.totalCalories -= meal.totalCalories
-        log.protein -= meal.protein
-        log.carbs -= meal.carbs
-        log.fats -= meal.fats
-        
-        modelContext.delete(meal)
-        try? modelContext.save()
     }
 }
 
-struct DailySummaryHeader: View {
-    let log: DailyLog
+struct MacroCard: View {
+    let label: String
+    let value: Double
+    let unit: String
+    let color: Color
     
     var body: some View {
-        VStack(spacing: 12) {
-            Text("DAILY TOTAL")
-                .font(.system(size: 10, weight: .black))
-                .foregroundColor(Color(hex: "94A3B8"))
-                .kerning(1.5)
+        VStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 9, weight: .black))
+                .foregroundColor(Theme.Colors.textTertiary)
             
-            Text("\(log.totalCalories)")
-                .font(.system(size: 48, weight: .black, design: .rounded))
-                .foregroundColor(Color(hex: "0F172A"))
-            
-            HStack(spacing: 20) {
-                MacroPill(label: "P", value: log.protein, color: Color(hex: "4F46E5"))
-                MacroPill(label: "C", value: log.carbs, color: Color(hex: "4F46E5"))
-                MacroPill(label: "F", value: log.fats, color: Color(hex: "4F46E5"))
+            HStack(alignment: .bottom, spacing: 2) {
+                Text("\(Int(value))")
+                    .font(.system(size: 24, weight: .black, design: .rounded))
+                    .foregroundColor(Theme.Colors.textPrimary)
+                Text(unit)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(color)
+                    .padding(.bottom, 2)
             }
         }
         .frame(maxWidth: .infinity)
-        .padding(24)
-        .background(Color.white)
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.05), radius: 10, x: 0, y: 5)
+        .padding(.vertical, 15)
+        .background(Theme.Colors.backgroundSecondary)
+        .cornerRadius(16)
     }
 }
 
-struct MacroPill: View {
+struct MealCard: View {
+    let meal: MealEntry
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(meal.type.uppercased())
+                        .font(.system(size: 10, weight: .black))
+                        .foregroundColor(Theme.Colors.secondary)
+                    Text(meal.timestamp.formatted(date: .omitted, time: .shortened))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Theme.Colors.textTertiary)
+                }
+                
+                Spacer()
+                
+                Text("\(meal.totalCalories)")
+                    .font(.system(size: 28, weight: .black, design: .rounded))
+                    .foregroundColor(Theme.Colors.textPrimary)
+                Text("kcal")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .padding(.top, 8)
+            }
+            
+            // Food items
+            if !meal.foodItems.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(meal.foodItems, id: \.id) { item in
+                        HStack {
+                            Text(item.name)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Theme.Colors.textPrimary)
+                            Text("(\(item.quantity))")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(Theme.Colors.textTertiary)
+                            Spacer()
+                            Text("\(item.calories)")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(Theme.Colors.primary)
+                        }
+                    }
+                }
+                .padding(.top, 4)
+            }
+            
+            // Macros mini
+            HStack(spacing: 12) {
+                MealMacro(label: "P", value: meal.protein)
+                MealMacro(label: "C", value: meal.carbs)
+                MealMacro(label: "F", value: meal.fats)
+            }
+        }
+        .padding(16)
+        .background(Theme.Colors.backgroundSecondary)
+        .cornerRadius(16)
+    }
+}
+
+struct MealMacro: View {
     let label: String
     let value: Double
-    let color: Color
     
     var body: some View {
         HStack(spacing: 4) {
             Text(label)
                 .font(.system(size: 10, weight: .black))
-                .foregroundColor(color)
+                .foregroundColor(Theme.Colors.textTertiary)
             Text("\(Int(value))g")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(Color(hex: "0F172A"))
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(color.opacity(0.1))
-        .cornerRadius(12)
-    }
-}
-
-struct MealEntryRow: View {
-    let meal: MealEntry
-    
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(meal.type.uppercased())
-                    .font(.system(size: 10, weight: .black))
-                    .foregroundColor(Color(hex: "4F46E5"))
-                
-                Text("\(meal.totalCalories) kcal")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(Color(hex: "0F172A"))
-                
-                // Construct summary string
-                let itemsList = meal.foodItems.map { $0.name }.joined(separator: ", ")
-                Text(itemsList)
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(hex: "64748B"))
-                    .lineLimit(1)
-            }
-            
-            Spacer()
-            
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(Color(hex: "CBD5E1"))
-        }
-        .padding(16)
-        .background(Color.white)
-        .cornerRadius(16)
-        .shadow(color: .black.opacity(0.03), radius: 5, x: 0, y: 2)
-    }
-}
-struct MealDetailSheet: View {
-    let meal: MealEntry
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-        NavigationStack {
-            VStack(spacing: 25) {
-                // Header with Macros
-                VStack(spacing: 15) {
-                    Text(meal.type.uppercased())
-                        .font(.system(size: 14, weight: .black))
-                        .foregroundColor(Color(hex: "4F46E5"))
-                        .kerning(2)
-                    
-                    Text("\(meal.totalCalories) KCAL")
-                        .font(.system(size: 32, weight: .black, design: .rounded))
-                        .foregroundColor(Color(hex: "0F172A"))
-                }
-                .padding(.top)
-                
-                Divider()
-                
-                // Items List
-                VStack(alignment: .leading, spacing: 20) {
-                    Text("BREAKDOWN")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundColor(Color(hex: "94A3B8"))
-                        .kerning(1)
-                    
-                    ScrollView {
-                        VStack(spacing: 16) {
-                            ForEach(meal.foodItems) { item in
-                                HStack {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(item.name.capitalized)
-                                            .font(.system(size: 16, weight: .bold))
-                                            .foregroundColor(Color(hex: "1E293B"))
-                                        Text(item.quantity)
-                                            .font(.system(size: 12, weight: .medium))
-                                            .foregroundColor(Color(hex: "64748B"))
-                                    }
-                                    Spacer()
-                                    Text("\(item.calories) kcal")
-                                        .font(.system(size: 14, weight: .black))
-                                        .foregroundColor(Color(hex: "4F46E5"))
-                                }
-                                .padding(.vertical, 8)
-                                .overlay(Rectangle().frame(height: 1).foregroundColor(Color(hex: "F1F5F9")), alignment: .bottom)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal)
-                
-                Spacer()
-            }
-            .navigationTitle("Meal Details")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") { dismiss() }
-                }
-            }
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(Theme.Colors.textSecondary)
         }
     }
 }

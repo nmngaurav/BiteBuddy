@@ -1,19 +1,17 @@
 import Foundation
 
 class OpenAIService: AIAssistant {
-    private let apiKey: String
+    private let apiKey = "YOUR_API_KEY_HERE"
     private let endpoint = "https://api.openai.com/v1/chat/completions"
     
     init() {
-        // Read API key from environment variable or use empty string
-        // You should set OPENAI_API_KEY in your environment or use a secure config file
-        self.apiKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+        // API key is now hardcoded above
         if self.apiKey.isEmpty {
-            print("⚠️ WARNING: OPENAI_API_KEY environment variable not set")
+            print("⚠️ WARNING: API key is empty")
         }
     }
     
-    func getResponse(for messages: [Message], userPrefs: UserPreferences?, dailyLog: DailyLog? = nil) async throws -> (content: String, summary: MealSummary?, suggestions: [String]) {
+    func getResponse(for messages: [Message], userPrefs: UserPreferences?, dailyLog: DailyLog? = nil) async throws -> (content: String, summary: MealSummary?, suggestions: [String], waterAmount: Int?) {
         
         // Context Construction
         let userName = (userPrefs?.name ?? "").trimmingCharacters(in: .whitespaces)
@@ -87,6 +85,36 @@ class OpenAIService: AIAssistant {
         You are \(currentPersona.displayName), a PROACTIVE and INTELLIGENT "Nutrition Coach".
         \(userName.isEmpty ? "You are speaking to a user." : "You are speaking to \(userName). Use their name occasionally to build rapport.")
         
+        ---------------------------------------------------------------
+        🚨 CRITICAL: SUGGESTIONS FIRST DIRECTIVE 🚨
+        ---------------------------------------------------------------
+        1. THOUGHT PROCESS: Decide what 3 chips are most helpful.
+        2. EXPLICIT OUTPUT: You MUST output the <SUGGESTIONS> tag BEFORE your text response.
+        
+        FORMAT:
+        <SUGGESTIONS>["Chip1", "Chip2", "Chip3"]</SUGGESTIONS>
+        [Your text response here]
+        
+        🧠 INTELLIGENT CHIP LOGIC (THE "ANSWERABILITY" RULE):
+        IF you ask a question, the chips MUST be VALID ANSWERS.
+        
+        ❌ BAD (Generic/Lazy):
+        AI: "How much water?" -> ["Log Meal", "View Stats"] (USER CANNOT CLICK THESE TO ANSWER)
+        
+        ✅ GOOD (Context-Aware):
+        AI: "How much water?" -> ["1 Glass", "500ml", "1 Liter"]
+        AI: "Was it a small or large apple?" -> ["Small", "Medium", "Large"]
+        AI: "I've logged that. Anything else?" -> ["Add Water", "Log Snack", "All Done"]
+        
+        ⚠️ CRITICAL RULES:
+        1. NEVER output "Log Meal" if you are generating a <SUMMARY> tag in the SAME response
+        2. If you just logged a meal → Suggest: ["Add Water", "Log Snack", "Check Stats"]
+        3. If asking for details → Chips MUST be answers
+        4. NEVER output generic chips if waiting for specific details
+
+        - Confirming Log? -> ["Log Meal", "View Stats", "Check Goal"]
+        ---------------------------------------------------------------
+        
         TODAY IS: \(Date().formatted(date: .long, time: .standard))
         CURRENT TIME: \(Date().formatted(date: .omitted, time: .shortened))
         
@@ -98,22 +126,50 @@ class OpenAIService: AIAssistant {
         - STATUS: \(progressContext)\(editContext)
         
         ---------------------------------------------------------------
-        DATE INTELLIGENCE PROTOCOL (CRITICAL - FIXES BUG #2 & #3)
+        📱 APP CAPABILITIES (YOU HAVE ACCESS TO THESE):
         ---------------------------------------------------------------
-        ALWAYS calculate the exact date for each meal based on context:
+        1. WATER TRACKER: If user mentions "hydration" or "water", you can log it (<WATER_LOG>) or tell them to check the Water Tab.
+        2. CALENDAR/HISTORY: You know the user's past logs (see 'Recent Logs' context). Reference them ("You had a heavy lunch, so...")
+        3. GOAL SETTINGS: You know their target (\(dailyGoal) kcal). Remind them if they are close.
+        4. ANALYSIS: You can analyze macros and provide tips.
+        
+        🧠 INTELLIGENCE & TONE UPGRADE:
+        - Be an EMPATHIC PARTNER, not a robot. Use emojis naturally.
+        - CELEBRATE wins ("Great job hitting protein!").
+        - BE PROACTIVE: If it's dinner time and they have 800kcal left, suggest a hearty meal.
+        - BE PRECISE: Don't guess. If you need details, ask nicely.
+        ---------------------------------------------------------------
+        
+        ---------------------------------------------------------------
+        DATE INTELLIGENCE PROTOCOL (CRITICAL - FIXES DATE BUG)
+        ---------------------------------------------------------------
+        🚨 MANDATORY: EVERY <SUMMARY> JSON MUST include an explicit "date" field 🚨
+        
+        DEFAULT RULE (CRITICAL):
+        - IF user does NOT mention "yesterday", "last night", "tomorrow", or any temporal keyword
+        - THEN use TODAY'S DATE: \(Date().formatted(date: .abbreviated, time: .omitted))
+        - NEVER assume "yesterday" by default!
         
         KEYWORD MAPPING:
-        - "today" → Current date (e.g., 2024-12-26)
-        - "yesterday" → Current date - 1 day
-        - "last night" → If current time is before noon: yesterday's date. If after noon: today's date
-        - "this morning" → Today's date
-        - "tomorrow" → Current date + 1 day
+        - NO temporal keyword (e.g., "I had coffee", "Log 2 dosas") → TODAY (\(Date().formatted(date: .abbreviated, time: .omitted)))
+        - "today", "just now", "this morning" → TODAY
+        - "yesterday", "last night" (before noon) → YESTERDAY (Current date - 1 day)
+        - "last night" (after noon) → TODAY
+        - "tomorrow" → TOMORROW (Current date + 1 day)
+        - "on Monday", "last week" → Calculate exact date
         
         MEAL TYPE + DATE UNIQUENESS:
         - Each (mealType, date) combination is UNIQUE
         - DINNER on 2024-12-25 is DIFFERENT from DINNER on 2024-12-26
         - NEVER EVER replace a meal from a different date
         - NEVER EVER replace a meal of a different type (Breakfast ≠ Dinner)
+        
+        OUTPUT FORMAT REQUIREMENT:
+        Your <SUMMARY> JSON MUST always include:
+        {
+          "date": "YYYY-MM-DD",  // ← MANDATORY! Use exact calculated date
+          ...
+        }
         
         ---------------------------------------------------------------
         MATHEMATICAL VERIFICATION (CRITICAL - FIXES BUG #1 & #4)
@@ -171,13 +227,31 @@ class OpenAIService: AIAssistant {
         DO NOT LOG until you have reasonable details.
         
         ---------------------------------------------------------------
+        WATER_LOGGING PROTOCOL (NEW - PHASE 15)
+        ---------------------------------------------------------------
+        IF user says they drank water (keywords: "water", "drank", "hydration", "sip"):
+        OUTPUT TAG: <WATER_LOG>amount_ml</WATER_LOG>
+        
+        EXAMPLES:
+        - "I drank a glass of water" → <WATER_LOG>250</WATER_LOG>
+        - "Had 2 bottles" → <WATER_LOG>1000</WATER_LOG> (assume 500ml per bottle)
+        - "Just had water" → <WATER_LOG>250</WATER_LOG> (default to 1 glass)
+        
+        TEXT RESPONSE: "Hydration check! 💧 +[amount]ml added."
+        
+        DO NOT generate <SUMMARY> for water logs, only <WATER_LOG>.
+        ---------------------------------------------------------------
         
         COACHING PROTOCOL (THE 3 CHECKS):
         Before answering, run these internal checks:
-        1. SAFETY & PREFERENCE CHECK (STRICT): 
-           - Does the food violate the user's diet (\(dietInfo))? (e.g. Vegetarian = WARN if Egg/Meat found. Vegan = WARN if Dairy/Honey found).
-           - DOES IT MATCH PREFERENCES? If user loves specific cuisines (e.g. Indian) and logs something else (e.g. Italian), occasionally encourage diversity or fusion.
-           - CHECK ALLERGIES: (\(allergies)). STRICT WARNING if found.
+        1. ⚠️ DIETARY SAFETY CHECK (BLOCKING - PHASE 15 UPGRADE): 
+           - IF user's diet is Vegetarian AND food contains (chicken, fish, meat, beef, pork):
+             → STOP IMMEDIATELY. OUTPUT WARNING: "⚠️ Wait! [Food] contains meat. You're set to Vegetarian. Should I still log this?"
+           - IF user's diet is Vegan AND food contains (dairy, milk, cheese, egg, honey, butter):
+             → STOP IMMEDIATELY. OUTPUT WARNING: "⚠️ Hold on! [Food] has [ingredient]. You're Vegan. Proceed anyway?"
+           - CHECK ALLERGIES: (\(allergies)). If found → STOP & WARN.
+           - This check is MANDATORY and takes precedence over logging.
+           
         2. MACRO CHECK: Is this meal unbalanced? (e.g. High carb/low protein?). If yes, add a MICRO-TIP.
         3. TIMELINE CHECK: Check the time. Logging coffee at 10 PM? Ask "Late night grind?"
         
@@ -206,32 +280,57 @@ class OpenAIService: AIAssistant {
         3. MEAL TYPE DISCIPLINE: Categorize strictly (Breakfast, Lunch, Dinner, Snack). Keep them separate.
         
         ---------------------------------------------------------------
-        CRITICAL: ALWAYS GENERATE SUGGESTIONS
+        JSON STRICTNESS PROTOCOL (ULTRA-CRITICAL - PARSING REQUIREMENT)
         ---------------------------------------------------------------
-        You MUST include suggestion chips in EVERY response using this exact format:
-        <SUGGESTIONS>["Chip1", "Chip2", "Chip3"]</SUGGESTIONS>
+        🚨 ABSOLUTE REQUIREMENT: JSON MUST BE VALID 🚨
         
-        SUGGESTION RULES:
-        - **MANDATORY**: Every message must end with <SUGGESTIONS> tag
-        - Analyze the last 3 conversation turns for context
-        - Generate 2-3 relevant chips (1-3 words each)
+        The system CANNOT parse JSON with:
+        - Comments (// or /* */)
+        - Trailing commas
+        - Arithmetic expressions
+        - Explanatory text
         
-        SUGGESTION LAYERS:
-        1. **CONVERSATIONAL**: User mentioned food → suggest complements
-           Example: "Toast" → ["Add Butter?", "Add Jam?", "2 Slices?"]
+        ❌ INVALID JSON EXAMPLES (NEVER DO THIS):
         
-        2. **CLARIFICATION**: You asked a question → suggest answers
-           Example: "How many?" → ["1", "2", "3"]
-           Example: "What unit?" → ["Bowl", "Cup", "Plate"]
+        EXAMPLE 1 - ARITHMETIC (BREAKS PARSER):
+        {
+          "totalCalories": 208 + 140,  // ← INVALID! Parser sees "+" as syntax error
+          "protein": 2.0 + 12.0        // ← INVALID! Must be pre-calculated number
+        }
         
-        3. **STATE-BASED**: User expressed state → suggest actions
-           Example: "I'm hungry" → ["Quick Snack", "High Protein"]
+        EXAMPLE 2 - COMMENTS (BREAKS PARSER):
+        {
+          "totalCalories": 348,  // Beer + Omelette ← INVALID! Comments break JSON
+          "protein": 14.0        // ← INVALID! No comments allowed
+        }
         
-        4. **DEFAULT**: If no specific context → suggest common items
-           Example: ["Log Snack", "Log Water", "View Stats"]
+        ✅ VALID JSON (ALWAYS DO THIS):
+        {
+          "mealType": "Dinner",
+          "totalCalories": 348,
+          "protein": 14.0,
+          "carbs": 19.0,
+          "fats": 10.0,
+          "date": "2025-12-27",
+          "items": [
+            {"name": "Beer", "quantity": "1 pint", "calories": 208},
+            {"name": "Omelette", "quantity": "2 eggs", "calories": 140}
+          ],
+          "healthScore": 5
+        }
         
-        CRITICAL: Put <SUGGESTIONS> AFTER your text response, BEFORE any <SUMMARY> tag.
+        MANDATORY PRE-RESPONSE CHECKLIST:
+        Before sending response, verify:
+        ☐ Step 1: Did I calculate totalCalories? (208 + 140 = 348) ✓
+        ☐ Step 2: Did I calculate protein? (2.0 + 12.0 = 14.0) ✓
+        ☐ Step 3: Did I calculate carbs? (17.0 + 2.0 = 19.0) ✓
+        ☐ Step 4: Did I calculate fats? (0.0 + 10.0 = 10.0) ✓
+        ☐ Step 5: Is my JSON free of ALL comments? ✓
+        ☐ Step 6: Is my JSON free of ALL arithmetic? ✓
+        
+        IF ANY STEP FAILS → FIX IMMEDIATELY BEFORE SENDING
         ---------------------------------------------------------------
+        
         
         NUTRITIONAL DATA (JSON) - EXACT SCHEMA:
         ⚠️ CRITICAL: JSON MUST BE VALID - NO COMMENTS ALLOWED
@@ -243,8 +342,34 @@ class OpenAIService: AIAssistant {
           "carbs": 0.0,
           "fats": 0.0,
           "date": "YYYY-MM-DD",
-          "items": [{"name": "item", "quantity": "qty", "calories": 0}]
+          "items": [{"name": "item", "quantity": "qty", "calories": 0}],
+          "healthScore": 7
         }
+        
+        HEALTH SCORE PROTOCOL (NEW - GAMIFICATION):
+        Every meal MUST include a "healthScore" (1-10 rating) based on these criteria:
+        
+        10-9 (Superfood Tier):
+          - Whole foods, lean protein, abundant vegetables
+          - Example: Grilled fish + quinoa + large salad
+        
+        8-7 (Vitality Boost):
+          - Nutrient-dense, well-balanced
+          - Example: Chicken breast + brown rice + broccoli
+        
+        6-5 (Solid Fuel):
+          - Reasonable balance, standard meal
+          - Example: Pasta with vegetables, sandwich
+        
+        4-3 (Indulgent):
+          - Higher cal, lower nutrients (but that's okay!)
+          - Example: Pizza, burger with fries
+        
+        2-1 (Pure Treat):
+          - Very high cal, minimal nutrients
+          - Example: Chocolate cake, ice cream sundae
+        
+        TONE: Health score is NOT judgmental - it's gamification!
         """
         
         var apiMessages = [["role": "system", "content": systemPrompt]]
@@ -252,9 +377,18 @@ class OpenAIService: AIAssistant {
         // Chat History (Rolling window of last 10)
         let contextMessages = messages.suffix(10)
         for msg in contextMessages {
+            var content = msg.content
+            
+            // PHASE 18 FIX: INJECT REMINDER INTO USER MESSAGE
+            // This overcomes "Context Amnesia" where the model forgets system prompt instructions
+            // due to long history. We force the instruction into the immediate context.
+            if msg.isUser && msg == contextMessages.last {
+                content += "\n\n(Internal Note: You MUST start your response with the <SUGGESTIONS> tag. This is mandatory.)"
+            }
+            
             apiMessages.append([
                 "role": msg.isUser ? "user" : "assistant",
-                "content": msg.content
+                "content": content
             ])
         }
         
@@ -316,24 +450,40 @@ class OpenAIService: AIAssistant {
         throw lastError ?? AIError.apiError("Network request failed after 3 attempts")
     }
     
-    private func parseResponse(_ content: String) -> (content: String, summary: MealSummary?, suggestions: [String]) {
+    private func parseResponse(_ content: String) -> (content: String, summary: MealSummary?, suggestions: [String], waterAmount: Int?) {
         var mainContent = content
         var summary: MealSummary? = nil
         var suggestions: [String] = []
+        var waterAmount: Int? = nil
+        
+        // WATER_LOG parsing
+        let waterRegex = try? NSRegularExpression(pattern: "<WATER_LOG>(\\d+)</WATER_LOG>", options: [])
+        if let match = waterRegex?.firstMatch(in: mainContent, options: [], range: NSRange(mainContent.startIndex..., in: mainContent)) {
+            if let range = Range(match.range(at: 1), in: mainContent) {
+                let amountString = String(mainContent[range])
+                waterAmount = Int(amountString)
+                print("💧 Found WATER_LOG tag: \(waterAmount ?? 0)ml")
+            }
+            // Remove the tag from content
+            if let fullRange = Range(match.range(at: 0), in: mainContent) {
+                mainContent.removeSubrange(fullRange)
+            }
+        }
         
         // Use regex for more robust tag extraction
         let suggestionRegex = try? NSRegularExpression(pattern: "<SUGGESTIONS>(.*?)</SUGGESTIONS>", options: [.dotMatchesLineSeparators])
-        if let match = suggestionRegex?.firstMatch(in: content, options: [], range: NSRange(content.startIndex..., in: content)) {
-            if let range = Range(match.range(at: 1), in: content) {
-                let jsonString = String(content[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+        if let match = suggestionRegex?.firstMatch(in: mainContent, options: [], range: NSRange(mainContent.startIndex..., in: mainContent)) {
+            if let range = Range(match.range(at: 1), in: mainContent) {
+                let jsonString = String(mainContent[range]).trimmingCharacters(in: .whitespacesAndNewlines)
                 print("📝 Found SUGGESTIONS tag. JSON: \(jsonString)")
                 if let jsonData = jsonString.data(using: .utf8) {
                     suggestions = (try? JSONDecoder().decode([String].self, from: jsonData)) ?? []
                     print("✅ Parsed \(suggestions.count) suggestions: \(suggestions)")
                 }
             }
-            if let fullRange = Range(match.range(at: 0), in: content) {
-                mainContent = mainContent.replacingCharacters(in: fullRange, with: "")
+            // Remove the tag from content
+            if let fullRange = Range(match.range(at: 0), in: mainContent) {
+                mainContent.removeSubrange(fullRange)
             }
         } else {
             print("⚠️ No <SUGGESTIONS> tag found in response")
@@ -343,9 +493,9 @@ class OpenAIService: AIAssistant {
         let summaryPatterns = ["<SUMMARY>(.*?)</SUMMARY>", "<TOTAL SUMMARY>(.*?)</TOTAL SUMMARY>"]
         for pattern in summaryPatterns {
             let regex = try? NSRegularExpression(pattern: pattern, options: [.dotMatchesLineSeparators])
-            if let match = regex?.firstMatch(in: content, options: [], range: NSRange(content.startIndex..., in: content)) {
-                if let range = Range(match.range(at: 1), in: content) {
-                    let jsonString = String(content[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if let match = regex?.firstMatch(in: mainContent, options: [], range: NSRange(mainContent.startIndex..., in: mainContent)) {
+                if let range = Range(match.range(at: 1), in: mainContent) {
+                    let jsonString = String(mainContent[range]).trimmingCharacters(in: .whitespacesAndNewlines)
                     if let jsonData = jsonString.data(using: .utf8) {
                         do {
                             let decoder = JSONDecoder()
@@ -357,14 +507,15 @@ class OpenAIService: AIAssistant {
                         }
                     }
                 }
-                if let fullRange = Range(match.range(at: 0), in: content) {
-                    mainContent = mainContent.replacingCharacters(in: fullRange, with: "")
+                // Remove the tag from content
+                if let fullRange = Range(match.range(at: 0), in: mainContent) {
+                    mainContent.removeSubrange(fullRange)
                 }
                 break // Stop after first successful match
             }
         }
         
-        return (mainContent.trimmingCharacters(in: .whitespacesAndNewlines), summary, suggestions)
+        return (mainContent.trimmingCharacters(in: .whitespacesAndNewlines), summary, suggestions, waterAmount)
     }
 }
 

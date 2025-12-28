@@ -11,18 +11,52 @@ struct BiteBuddyApp: App {
             MealEntry.self,
             SavedFoodItem.self
         ])
-        let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
+        let modelConfiguration = ModelConfiguration(
+            schema: schema, 
+            isStoredInMemoryOnly: false,
+            allowsSave: true
+        )
 
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // Migration failed - delete old data and create fresh container
+            print("⚠️ Migration failed: \(error). Creating fresh database.")
+            
+            // Try to delete the old store
+            let url = modelConfiguration.url
+            try? FileManager.default.removeItem(at: url)
+            
+            // Try again with fresh database
+            do {
+                return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            } catch {
+                fatalError("Could not create ModelContainer even after cleanup: \(error)")
+            }
         }
     }()
 
+    @State private var showSplash = true
+
     var body: some Scene {
         WindowGroup {
-            ChatView()
+            ZStack {
+                if showSplash {
+                    SplashView()
+                        .transition(.opacity)
+                        .zIndex(1) // Ensure it sits on top during transition
+                } else {
+                    ChatView()
+                        .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.5), value: showSplash)
+            .onAppear {
+                // Dismiss splash after 2.5 seconds
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                    showSplash = false
+                }
+            }
         }
         .modelContainer(sharedModelContainer)
     }

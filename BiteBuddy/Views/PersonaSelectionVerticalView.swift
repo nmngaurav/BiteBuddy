@@ -64,61 +64,53 @@ struct PersonaVerticalCard: View {
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 0) {
-                // Left: Avatar Image (Large)
+            HStack(spacing: 16) {
+                // Left: Icon
                 ZStack {
-                    if isSelected {
-                        // Premium Glow Behind
-                        Circle()
-                            .fill(Theme.Colors.primary.opacity(0.3))
-                            .blur(radius: 20)
-                            .frame(width: 90, height: 90)
-                    }
+                    Circle()
+                        .fill(isSelected ? Theme.Colors.primary.opacity(0.15) : Theme.Colors.backgroundPrimary.opacity(0.3))
+                        .frame(width: 70, height: 70)
                     
-                    Image(systemName: persona.iconName) // Placeholder, ideally use real Image asset if available
+                    Image(systemName: persona.iconName)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 60, height: 60)
+                        .frame(width: 36, height: 36)
                         .foregroundColor(isSelected ? Theme.Colors.primary : Theme.Colors.textTertiary)
-                        .scaleEffect(isSelected ? 1.1 : 1.0)
+                        .scaleEffect(isSelected ? 1.05 : 1.0)
                 }
-                .frame(width: 100)
-                .background(Theme.Colors.backgroundPrimary.opacity(0.3))
                 
-                // Right: Info
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(persona.displayName)
-                        .font(.system(size: 18, weight: .black, design: .rounded))
-                        .foregroundColor(isSelected ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
-                    
+                // Right: Purpose-focused text
+                VStack(alignment: .leading, spacing: 4) {
                     Text(persona.description)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(Theme.Colors.textTertiary)
-                        .lineLimit(3)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(isSelected ? Theme.Colors.textPrimary : Theme.Colors.textSecondary)
+                        .lineLimit(2)
                         .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.vertical, 20)
-                .padding(.trailing, 20)
+                .padding(.trailing, 8)
                 
                 Spacer()
                 
                 // Selection Indicator
                 if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(Theme.Colors.primary)
-                        .padding(.trailing, 20)
+                    Circle()
+                        .fill(Theme.Colors.primary)
+                        .frame(width: 20, height: 20)
+                        .overlay(
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(Theme.Colors.backgroundPrimary)
+                        )
                 }
             }
+            .padding(16)
             .background(isSelected ? Theme.Colors.backgroundSecondary : Theme.Colors.backgroundSecondary.opacity(0.5))
-            .cornerRadius(24)
+            .cornerRadius(20)
             .overlay(
-                RoundedRectangle(cornerRadius: 24)
+                RoundedRectangle(cornerRadius: 20)
                     .stroke(isSelected ? Theme.Colors.primary : Color.clear, lineWidth: 2)
             )
-            .shadow(color: isSelected ? Theme.Colors.primary.opacity(0.1) : .clear, radius: 10, x: 0, y: 5)
-            .scaleEffect(isSelected ? 1.02 : 1.0)
+            .shadow(color: isSelected ? Theme.Colors.primary.opacity(0.2) : .clear, radius: 12, x: 0, y: 4)
         }
         .buttonStyle(PlainButtonStyle())
     }

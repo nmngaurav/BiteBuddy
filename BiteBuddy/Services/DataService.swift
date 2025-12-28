@@ -14,12 +14,10 @@ class DataService {
     func logMeal(summary: MealSummary, associatedMessageId: UUID? = nil, replacingMessageId: UUID? = nil) {
         // Resolve Target Date
         var targetDate = Date()
-        if let summaryDateStr = summary.date {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            if let parsed = formatter.date(from: summaryDateStr) {
-                targetDate = parsed
-            }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let parsed = formatter.date(from: summary.date) {
+            targetDate = parsed
         }
         
         let today = Calendar.current.startOfDay(for: targetDate)
@@ -44,10 +42,33 @@ class DataService {
         
         var mealEntryToUpdate: MealEntry?
         
-        // 2. Check for Replacement
-        if let replaceId = replacingMessageId {
+        // STEP 1: DATABASE-FIRST DEDUPLICATION
+        // Check if a meal of the SAME TYPE already exists on the SAME DATE
+        // This prevents duplicate cards (e.g., two DINNER cards on Dec 27)
+        let existingMealOfSameType = dailyLog.meals.first(where: { 
+            $0.type.uppercased() == summary.mealType.uppercased() 
+        })
+        
+        if let existing = existingMealOfSameType {
+            print("⚠️ DEDUPLICATION: Found existing \(summary.mealType) on \(today.formatted()), UPDATING instead of creating duplicate")
+            mealEntryToUpdate = existing
+            
+            // Subtract old values from daily totals
+            dailyLog.totalCalories -= existing.totalCalories
+            dailyLog.protein -= existing.protein
+            dailyLog.carbs -= existing.carbs
+            dailyLog.fats -= existing.fats
+            
+            // Clear old food items
+            for item in existing.foodItems {
+                modelContext.delete(item)
+            }
+            existing.foodItems.removeAll()
+            
+        // STEP 2: FALLBACK - Check chat context (for explicit edits via "Edit that meal")
+        } else if let replaceId = replacingMessageId {
             if let existing = dailyLog.meals.first(where: { $0.associatedMessageId == replaceId }) {
-                print("Persistence Audit: Editing existing meal entry (\(existing.type))")
+                print("Persistence Audit: Editing existing meal entry (\(existing.type)) via chat context")
                 mealEntryToUpdate = existing
                 
                 // Subtract old values
@@ -112,6 +133,37 @@ class DataService {
             print("✅ SUCCESS: Saved to database for \(today.formatted())")
         } catch {
             print("❌ CRITICAL ERROR: Failed to save meal: \(error)")
+        }
+    }
+    
+    func logWater(amount: Int, for date: Date = Date()) {
+        let today = Calendar.current.startOfDay(for: date)
+        
+        // Find or create DailyLog
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        let descriptor = FetchDescriptor<DailyLog>(
+            predicate: #Predicate { $0.date >= today && $0.date < tomorrow }
+        )
+        
+        let existingLogs = (try? modelContext.fetch(descriptor)) ?? []
+        let dailyLog: DailyLog
+        
+        if let existingLog = existingLogs.first {
+            dailyLog = existingLog
+        } else {
+            dailyLog = DailyLog(date: today)
+            modelContext.insert(dailyLog)
+        }
+        
+        // Add water amount
+        dailyLog.waterIntake += amount
+        
+        print("💧 Logged \(amount)ml water. Total: \(dailyLog.waterIntake)ml")
+        
+        do {
+            try modelContext.save()
+        } catch {
+            print("❌ Failed to save water log: \(error)")
         }
     }
     

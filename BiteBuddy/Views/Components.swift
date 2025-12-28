@@ -24,14 +24,14 @@ struct MessageBubble: View {
                         .padding(.horizontal, 18)
                         .padding(.vertical, 14)
                         .background(
-                            message.isUser ? Theme.Colors.secondary : Theme.Colors.backgroundSecondary
+                            message.isUser ? Theme.Colors.primary : Theme.Colors.backgroundSecondary
                         )
                         .foregroundColor(Theme.Colors.textPrimary)
                         .cornerRadius(18)
                         .shadow(color: .black.opacity(0.04), radius: 10, x: 0, y: 5)
                         .overlay(
                             RoundedRectangle(cornerRadius: 18)
-                                .stroke(message.isUser ? Theme.Colors.secondary : Theme.Colors.backgroundSecondary.opacity(0.5), lineWidth: 1)
+                                .stroke(message.isUser ? Theme.Colors.primary : Theme.Colors.backgroundSecondary.opacity(0.5), lineWidth: 1)
                         )
                 }
                 
@@ -92,25 +92,12 @@ struct SummaryCard: View {
                             .font(.system(size: 10, weight: .black))
                             .foregroundColor(Theme.Colors.secondary)
                             .kerning(2)
-                        
-                        // Platinum Status Badge
-                        HStack(spacing: 3) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.system(size: 8))
-                            Text("SAVED")
-                                .font(.system(size: 8, weight: .bold))
-                                .kerning(0.5)
-                        }
-                        .foregroundColor(Theme.Colors.primary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 3)
-                        .background(Theme.Colors.primary.opacity(0.1))
-                        .clipShape(Capsule())
                     }
                     
                     Text("NUTRITIONAL METRIC")
-                        .font(.system(size: 16, weight: .black))
+                        .font(.system(size: 13, weight: .black))
                         .foregroundColor(Theme.Colors.textPrimary)
+                        .kerning(1.0)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 0) {

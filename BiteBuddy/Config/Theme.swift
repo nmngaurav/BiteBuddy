@@ -9,7 +9,7 @@ struct Theme {
         
         // Accents
         static let primary = Color(hex: "10B981") // Neon Emerald (Wellness/Success)
-        static let secondary = Color(hex: "4F46E5") // Royal Blue (Trust/Intelligence)
+        static let secondary = Color(hex: "06B6D4") // Cyan (Wellness/Water)
         static let warning = Color(hex: "EF4444") // Red
         
         // Text
@@ -25,7 +25,7 @@ struct Theme {
         )
         
         static let brandGradient = LinearGradient(
-            colors: [Color(hex: "4F46E5"), Color(hex: "7C3AED")], // Blue -> Purple
+            colors: [Color(hex: "10B981"), Color(hex: "06B6D4")], // Emerald -> Cyan
             startPoint: .leading,
             endPoint: .trailing
         )

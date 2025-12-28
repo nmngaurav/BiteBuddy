@@ -43,7 +43,7 @@ struct ModelSelectorView: View {
                                     HStack(spacing: 8) {
                                         Label(model.estimatedSpeed, systemImage: "bolt.fill")
                                             .font(.caption2)
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(Theme.Colors.primary)
                                     }
                                 }
                                 
