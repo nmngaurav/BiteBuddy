@@ -1,7 +1,6 @@
 import Foundation
 
 class OpenAIService: AIAssistant {
-//"REDACTED_API_KEY"
     private let apiKey = "sample api key"
     private let endpoint = "https://api.openai.com/v1/chat/completions"
     
