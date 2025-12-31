@@ -30,17 +30,25 @@ class WaterSoundManager {
     
     /// Preload all sound files into memory for zero-latency playback
     private func preloadSounds() {
-        // Attempt to load custom sounds
+        // Load custom pouring water sound
+        if let player = loadSound(for: .drop, filename: "pouring-water") {
+            player.volume = 0.6 // Comfortable volume for water sound
+            audioPlayers[.drop] = player
+        }
+        
+        // Attempt to load other custom sounds (optional)
         for soundType in WaterSoundType.allCases {
-            if let player = loadSound(for: soundType, filename: soundType.filename) {
-                player.volume = 0.7
-                audioPlayers[soundType] = player
+            if soundType != .drop { // Already loaded drop sound above
+                if let player = loadSound(for: soundType, filename: soundType.filename) {
+                    player.volume = 0.7
+                    audioPlayers[soundType] = player
+                }
             }
             
             // Populate system sound fallbacks
             switch soundType {
             case .drop:
-                systemSounds[.drop] = 1306 // Water drop sound
+                systemSounds[.drop] = 1306 // Water drop sound (fallback)
             case .milestone:
                 systemSounds[.milestone] = 1103 // Milestone chime
             case .goalComplete:
@@ -66,27 +74,10 @@ class WaterSoundManager {
     }
     
     /// Plays a procedural "filling" sound effect using pitch-shifted drops
+    /// NOW REPLACED: Just plays the custom pouring water sound once
     func playFillingSound() {
         guard isSoundEnabled else { return }
-        
-        // Create a sequence of drops with increasing pitch to simulate filling
-        let baseDelay = 0.12
-        
-        for i in 0..<4 {
-            DispatchQueue.main.asyncAfter(deadline: .now() + baseDelay * Double(i)) {
-                // Use system sound with slight variation
-                AudioServicesPlaySystemSound(1057) // Tink sound
-                
-                // Optional: try to use custom player with rate adjustment
-                if let dropPlayer = self.audioPlayers[.drop] {
-                    dropPlayer.currentTime = 0
-                    // Slightly increase pitch/rate for each subsequent drop
-                    dropPlayer.enableRate = true
-                    dropPlayer.rate = 1.0 + (Float(i) * 0.15)
-                    dropPlayer.play()
-                }
-            }
-        }
+        play(.drop) // Play the custom pouring-water.wav
     }
     
     /// Play sound with delay

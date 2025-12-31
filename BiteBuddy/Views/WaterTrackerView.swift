@@ -163,7 +163,7 @@ struct WaterTrackerView: View {
         let newProgress = progress
         checkMilestone(oldProgress: oldProgress, newProgress: newProgress)
         
-        // Premium sound effect - procedural filling
+        // Custom premium water sound (pouring-water.wav)
         soundManager.playFillingSound()
         
         // Update reminder schedule (reset timer)

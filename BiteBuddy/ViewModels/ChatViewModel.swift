@@ -16,13 +16,19 @@ class ChatViewModel {
     var showCelebration: Bool = false // Triggers confetti/haptics
     
     // PERSONA MANAGEMENT
+    // Explicit tracking property for SwiftUI observation
+    var selectedPersonaRawValue: String?
+    
     var currentPersona: BuddyPersona {
-        guard let prefs = userPrefs, let stored = prefs.selectedPersona else { return .biteBuddy }
+        guard let stored = selectedPersonaRawValue ?? userPrefs?.selectedPersona else { 
+            return .biteBuddy 
+        }
         return BuddyPersona(rawValue: stored) ?? .biteBuddy
     }
     
     func updatePersona(_ persona: BuddyPersona) {
         userPrefs?.selectedPersona = persona.rawValue
+        selectedPersonaRawValue = persona.rawValue
         try? modelContext?.save()
     }
     
@@ -63,7 +69,10 @@ class ChatViewModel {
                 }
                 // Sync settings
                 self.dailyGoal = userPrefs?.dailyGoal ?? 2000
+                // Sync persona selection for proper UI tracking
+                self.selectedPersonaRawValue = userPrefs?.selectedPersona
                 print("✅ Synced daily goal: \(self.dailyGoal)")
+                print("✅ Synced persona: \(selectedPersonaRawValue ?? "nil")")
             }
         } catch {
             print("Failed to fetch preferences: \(error)")
